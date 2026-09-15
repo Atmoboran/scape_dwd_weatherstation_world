@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Scans assets/models/low + assets/models/high and writes assets/models/manifest.json.
 
-Computes each instrument's bounding box from its low-LOD GLB (via trimesh) and lays
-instruments out on a simple grid in the walk-around world. Positions/scale can be
-hand-edited afterward without touching any code (see PLAN.md §2.4).
+Computes each instrument's bounding box, normalizes scale, and packs the instruments
+into one adjacent row so the world reads as a walkable exhibition rather than a few
+specks scattered across a field. Positions/scale/text can be hand-edited afterward
+without touching any code (see PLAN.md §2.4).
 """
 import json
-import math
 import re
 from pathlib import Path
 
@@ -18,14 +18,102 @@ LOW_DIR = MODELS_DIR / "low"
 HIGH_DIR = MODELS_DIR / "high"
 MANIFEST_PATH = MODELS_DIR / "manifest.json"
 
-GRID_SPACING = 10.0  # meters between instrument placements
-GRID_COLS = 3
-
-# STEP files carry no reliable unit metadata (see PLAN.md §2.4 "Important — units").
+# STEP files carry no reliable unit metadata (see PLAN.md §2.4 "Important - units").
 # As a placeholder default (until hand-calibrated against real instrument dimensions),
-# each model is scaled so its largest bbox dimension maps to this many meters -
-# keeps the initial scene visually sane instead of guessing raw units are meters.
-TARGET_MAX_DIM_M = 3.0
+# each model is scaled so its largest bbox dimension maps to this many meters.
+TARGET_MAX_DIM_M = 8.0
+
+GAP_M = 1.0  # gap between neighbouring station footprints
+
+ACCENTS = [
+    "#4fa3ff",
+    "#ffb04f",
+    "#6ee7a8",
+    "#ff7a9c",
+    "#c08cff",
+    "#ffe066",
+    "#57d4e8",
+    "#ff9a5a",
+]
+
+# Placeholder exhibit texts - these describe the general kind of station shown and are
+# meant to be reviewed/replaced by someone with the actual DWD site documentation.
+INFO = {
+    "01_MOHP": {
+        "title": "Hohenpeißenberg Observatory",
+        "description": (
+            "A mountain observatory site. Hohenpeißenberg in Bavaria holds one of the "
+            "longest unbroken weather records in the world, with observations running "
+            "since 1781 - which makes its measurement series a reference for studying "
+            "long-term climate change."
+        ),
+        "measures": ["Temperature", "Humidity", "Air pressure", "Radiation", "Trace gases"],
+    },
+    "02_Sturmwarn_Lindau": {
+        "title": "Storm Warning Station Lindau",
+        "description": (
+            "A lakeside storm-warning beacon. Around German lakes the flash rate is the "
+            "message: 40 flashes per minute is a strong-wind warning, 90 flashes per "
+            "minute is a storm warning - readable from a boat long before the weather "
+            "arrives."
+        ),
+        "measures": ["Wind speed", "Wind direction", "Gusts"],
+    },
+    "04_AMDA": {
+        "title": "Automatic Measuring Station",
+        "description": (
+            "An unstaffed automatic station. Sensors sit at standardised heights on the "
+            "masts so that readings are comparable between sites, and the station reports "
+            "on its own at fixed intervals, day and night, with no observer present."
+        ),
+        "measures": ["Temperature", "Humidity", "Wind", "Precipitation", "Sunshine duration"],
+    },
+    "05_Meer": {
+        "title": "Marine Measuring Platform",
+        "description": (
+            "A marine/coastal measurement platform. Instruments over water face salt spray "
+            "and constant motion, so the hardware is built to survive the environment it "
+            "is measuring."
+        ),
+        "measures": ["Wind", "Air temperature", "Water temperature", "Wave height"],
+    },
+    "06_MME": {
+        "title": "Measurement Field",
+        "description": (
+            "An open measurement field carrying an array of sensors. Keeping the surroundings "
+            "clear matters as much as the instruments: obstacles, buildings and trees would "
+            "distort wind and radiation readings."
+        ),
+        "measures": ["Temperature", "Humidity", "Soil temperature", "Radiation"],
+    },
+    "07_Airport": {
+        "title": "Airport Weather Station",
+        "description": (
+            "Aviation weather instrumentation. Anemometers sit near the runway thresholds and "
+            "a ceilometer measures cloud base, because for aviation the decisive numbers are "
+            "crosswind, visibility and cloud height."
+        ),
+        "measures": ["Wind", "Visibility / RVR", "Cloud base", "Air pressure (QNH)"],
+    },
+    "08_RADAK": {
+        "title": "Radar Site",
+        "description": (
+            "A radar installation. Radar does not sample a single point - it scans the "
+            "surrounding volume of atmosphere, which is what makes area-wide precipitation "
+            "maps and nowcasting possible."
+        ),
+        "measures": ["Precipitation intensity", "Echo top height", "Radial velocity"],
+    },
+    "09_ATSO_Norderney": {
+        "title": "Norderney Island Station",
+        "description": (
+            "A North Sea island station. Coastal and island sites cover the sea-to-land "
+            "transition, where the temperature contrast between water and land drives local "
+            "wind and fog."
+        ),
+        "measures": ["Wind", "Temperature", "Humidity", "Air pressure"],
+    },
+}
 
 
 def pretty_name(stem: str) -> str:
@@ -35,55 +123,74 @@ def pretty_name(stem: str) -> str:
     return name.replace("_", " ")
 
 
+def info_for(stem: str) -> dict:
+    key = re.sub(r"_v\d+$", "", stem)
+    return INFO.get(key, {})
+
+
 def main():
     low_files = sorted(LOW_DIR.glob("*.glb"))
-    instruments = []
+    entries = []
 
-    for i, low_path in enumerate(low_files):
+    for low_path in low_files:
         stem = low_path.stem
-        high_path = HIGH_DIR / low_path.name
-        if not high_path.exists():
+        if not (HIGH_DIR / low_path.name).exists():
             raise SystemExit(f"missing high-LOD file for {stem}")
 
-        # Read bbox from the un-compressed source GLB (trimesh can't decode Draco
-        # without the optional DracoPy dependency; bbox is unaffected by decimation
-        # or Draco compression anyway, so the raw source file is an equivalent source).
-        raw_path = MODELS_DIR / low_path.name
-        mesh = trimesh.load(raw_path, force="mesh")
+        mesh = trimesh.load(MODELS_DIR / low_path.name, force="mesh")
         bbox_min = mesh.bounds[0].tolist()
         bbox_max = mesh.bounds[1].tolist()
-        size = [bbox_max[j] - bbox_min[j] for j in range(3)]
-        max_dim = max(size) or 1.0
-        scale = TARGET_MAX_DIM_M / max_dim
+        size = [bbox_max[i] - bbox_min[i] for i in range(3)]
+        scale = TARGET_MAX_DIM_M / (max(size) or 1.0)
+        entries.append((stem, low_path.name, bbox_min, bbox_max, size, scale))
 
-        col = i % GRID_COLS
-        row = i // GRID_COLS
-        x = (col - (GRID_COLS - 1) / 2.0) * GRID_SPACING
-        z = -row * GRID_SPACING
-        # Sit the model on the ground plane (bbox min-Y at y=0), in raw model units.
-        y_offset = -bbox_min[1]
+    # Pack the stations into one row along X, footprints adjacent with a fixed gap.
+    total_width = sum(e[4][0] * e[5] for e in entries) + GAP_M * (len(entries) - 1)
+    cursor = -total_width / 2
 
+    instruments = []
+    for i, (stem, filename, bbox_min, bbox_max, size, scale) in enumerate(entries):
+        footprint = [size[0] * scale, size[2] * scale]
+        x = cursor + footprint[0] / 2
+        cursor += footprint[0] + GAP_M
+
+        info = info_for(stem)
         instruments.append(
             {
                 "id": stem,
-                "name": pretty_name(stem),
-                "low": f"assets/models/low/{low_path.name}",
-                "high": f"assets/models/high/{high_path.name}",
-                "position": [round(x, 3), 0, round(z, 3)],
+                "name": info.get("title") or pretty_name(stem),
+                "sourceName": pretty_name(stem),
+                "description": info.get("description", ""),
+                "measures": info.get("measures", []),
+                "accent": ACCENTS[i % len(ACCENTS)],
+                "low": f"assets/models/low/{filename}",
+                "high": f"assets/models/high/{filename}",
+                "position": [round(x, 3), 0, 0],
                 "rotationY": 0,
                 "scale": round(scale, 6),
-                "modelYOffset": round(y_offset, 6),
-                "bbox": {"min": bbox_min, "max": bbox_max, "size": size},
-                "units_note": (
-                    "STEP source carries no reliable unit metadata; `scale` is a "
-                    f"placeholder normalizing the model's largest bbox dimension to "
-                    f"{TARGET_MAX_DIM_M}m - hand-calibrate against the real instrument's "
-                    "known dimensions before treating this as accurate."
-                ),
+                # Recentres the mesh on its own footprint and sits it on the ground,
+                # in raw model units (applied inside the scaled group).
+                "modelOffset": [
+                    round(-(bbox_min[0] + bbox_max[0]) / 2, 6),
+                    round(-bbox_min[1], 6),
+                    round(-(bbox_min[2] + bbox_max[2]) / 2, 6),
+                ],
+                "footprint": [round(footprint[0], 3), round(footprint[1], 3)],
+                "height": round(size[1] * scale, 3),
             }
         )
 
-    manifest = {"instruments": instruments}
+    manifest = {
+        "note": (
+            "Generated by tools/generate_manifest.py. `scale` is a placeholder: the source "
+            "STEP files carry no reliable unit metadata, so each model's largest bounding-box "
+            f"dimension is normalized to {TARGET_MAX_DIM_M}m. Hand-calibrate against the real "
+            "instrument dimensions before treating scale or distances as accurate. The "
+            "`description`/`measures` texts are placeholder exhibit copy - review them against "
+            "the actual site documentation."
+        ),
+        "instruments": instruments,
+    }
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {MANIFEST_PATH} with {len(instruments)} instruments")
 

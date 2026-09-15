@@ -34,6 +34,17 @@
 - **API note for future runs:** the installed `cadquery-ocp` 8.0.1 exposes face-casting as
   `TopoDS.Face(shape)`, not `TopoDS.Face_s(shape)` as originally written below — the code sample in
   §0 has been corrected to match.
+- **Game/UX pass (§3.4 polish, done):** the scene is now laid out as one packed row of
+  adjacent stations along a gravel walkway (previously a wide grid that read as specks on
+  a field), the player spawns at the near end looking down the row, and the runtime gained
+  a proper game layer: a **visible** on-screen joystick + drag-to-look + sprint toggle on
+  touch (the previous invisible touch zones were the single worst usability bug - on a phone
+  there was nothing on screen to tell you how to move), a start screen that lists the right
+  controls per device, a "stations found" counter with the §3.4 find-all-N mechanic,
+  a rotating minimap, per-station accent colours/beacons/3D nameplates for wayfinding,
+  proximity info cards with description + measured quantities, head-bob, blob shadows,
+  a gradient sky and a procedural ground. Proximity is measured to the footprint edge
+  rather than the centre, since the platforms are ~8m wide.
 - **Still open:** instrument #3 (Windprofiler) conversion; hand-calibrating per-instrument `scale`
   against real dimensions; actual GitHub Pages hosting switch-on (Settings → Pages); real-device
   (not just emulated) mobile testing; instrument info panels beyond the name label; optional CI
