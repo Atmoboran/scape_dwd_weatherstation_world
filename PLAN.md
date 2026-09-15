@@ -1,23 +1,43 @@
 # Plan: "Meteo Instrument Walk" — a browser-based walk-around viewer for STEP-derived 3D models
 
-## Status (2026-09-15)
+## Status (2026-09-15, updated)
 
 - STEP → GLB conversion pipeline (§0) validated and run against all 9 source files.
 - 8 of 9 instruments successfully converted and pushed to `assets/models/` in this repo:
   `01_MOHP_v9.glb`, `02_Sturmwarn_Lindau_v17.glb`, `04_AMDA_v38.glb`, `05_Meer_v4.glb`,
   `06_MME_v9.glb`, `07_Airport_v51.glb`, `08_RADAK_v13.glb`, `09_ATSO_Norderney_v28.glb`.
-- `03 Windprofiler_Dio v24.step` (238MB, ~4.4M STEP entities — far larger than the others) was
-  **intentionally skipped for now** at the user's request. It will need its own conversion pass later,
-  likely with much coarser tessellation deflection and/or more wall-clock time/compute, given its size.
-- Conversion was run with **no color/material data** (none survived from the source STEPs, as
-  expected per §7 below) and with per-file deflection tuned by source file size (see
-  `deflection_for_size()` in the conversion script) — no gltf-transform optimization pass (§2.2,
-  simplify/draco/ktx2) has been applied yet, so these are raw tessellated GLBs, not yet
-  phone-optimized. That is the next step per the build order in §6.
+- `03 Windprofiler_Dio v24.step` (238MB, ~4.4M STEP entities — far larger than the others) is
+  **still skipped**. It will need its own conversion pass later, likely with much coarser
+  tessellation deflection and/or more wall-clock time/compute, given its size.
+- **GLB optimization pipeline (§2.2/§2.3) implemented and run**: `tools/optimize_glb.sh` runs
+  `gltf-transform` (weld/prune/dedup/draco, plus `simplify --ratio 0.15` for the low tier; no
+  texture steps since no textures survived) and produced two LOD tiers, committed to
+  `assets/models/low/` (1.7MB total) and `assets/models/high/` (1.9MB total) — the original
+  36MB of raw GLBs are dramatically under the ~50MB total-transfer target even before any
+  lazy-loading kicks in.
+- **`tools/generate_manifest.py` implemented**: computes each instrument's bbox from the raw GLB,
+  normalizes `scale` so each model's largest bbox dimension maps to a placeholder 3m (source STEPs
+  carry no reliable unit metadata — see the `units_note` in `manifest.json`, hand-calibration is
+  still a TODO), lays instruments out on a grid, and writes `assets/models/manifest.json`.
+- **Runtime app implemented** (§4): vanilla Three.js, no build step, ES modules via an import map
+  pointing at a self-hosted `assets/vendor/three/` (build + GLTFLoader/DRACOLoader/
+  PointerLockControls/BufferGeometryUtils + the Draco decoder WASM — no CDN dependency, per §7).
+  Ground plane, hemisphere+directional lighting, fog for pop-in masking. Desktop controls
+  (`PointerLockControls` + WASD) and mobile controls (custom touch joystick + drag-to-look, no
+  external library) both implemented in `src/player-controller.js`. Two-tier LOD + lazy
+  loading/disposal in `src/instrument-registry.js` (load low-LOD for every instrument up front,
+  swap in high-LOD within 15m, dispose it again past 20m, cap at 2 concurrent in-flight loads).
+  Bounding-box collision in `src/collision.js`. Loading screen + proximity name label in
+  `src/ui.js`. Verified end-to-end with headless Chromium (desktop + mobile-emulated): scene
+  renders, WASD/joystick movement, collision, proximity label, and high-LOD hot-swap all confirmed
+  working, zero console errors.
 - **API note for future runs:** the installed `cadquery-ocp` 8.0.1 exposes face-casting as
   `TopoDS.Face(shape)`, not `TopoDS.Face_s(shape)` as originally written below — the code sample in
   §0 has been corrected to match.
-- Remaining work (Three.js scene, LOD, lazy-loading, controls, hosting) is all still open — see §6.
+- **Still open:** instrument #3 (Windprofiler) conversion; hand-calibrating per-instrument `scale`
+  against real dimensions; actual GitHub Pages hosting switch-on (Settings → Pages); real-device
+  (not just emulated) mobile testing; instrument info panels beyond the name label; optional CI
+  size-guard workflow.
 
 **Reference project:** /hpc/uhome/bfrank/uwork/apps_scape/modelgrid_AR (flat repo of pre-converted `.glb`/`.usdz` pairs
 next to a single `index.html`, using `<model-viewer>` for AR quick-look). We are reusing the "flat,

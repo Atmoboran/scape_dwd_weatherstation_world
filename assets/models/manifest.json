@@ -1,0 +1,260 @@
+{
+  "instruments": [
+    {
+      "id": "01_MOHP_v9",
+      "name": "MOHP",
+      "low": "assets/models/low/01_MOHP_v9.glb",
+      "high": "assets/models/high/01_MOHP_v9.glb",
+      "position": [
+        -10.0,
+        0,
+        0.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          166.36000061035156,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          189.36000061035156,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "02_Sturmwarn_Lindau_v17",
+      "name": "Sturmwarn Lindau",
+      "low": "assets/models/low/02_Sturmwarn_Lindau_v17.glb",
+      "high": "assets/models/high/02_Sturmwarn_Lindau_v17.glb",
+      "position": [
+        0.0,
+        0,
+        0.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          131.10438537597656,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          154.10438537597656,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "04_AMDA_v38",
+      "name": "AMDA",
+      "low": "assets/models/low/04_AMDA_v38.glb",
+      "high": "assets/models/high/04_AMDA_v38.glb",
+      "position": [
+        10.0,
+        0,
+        0.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          286.7936706542969,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          309.7936706542969,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "05_Meer_v4",
+      "name": "Meer",
+      "low": "assets/models/low/05_Meer_v4.glb",
+      "high": "assets/models/high/05_Meer_v4.glb",
+      "position": [
+        -10.0,
+        0,
+        -10.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 20.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -20.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          4.0,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          24.0,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "06_MME_v9",
+      "name": "MME",
+      "low": "assets/models/low/06_MME_v9.glb",
+      "high": "assets/models/high/06_MME_v9.glb",
+      "position": [
+        0.0,
+        0,
+        -10.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": -0.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          0.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          191.38577270507812,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          191.38577270507812,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "07_Airport_v51",
+      "name": "Airport",
+      "low": "assets/models/low/07_Airport_v51.glb",
+      "high": "assets/models/high/07_Airport_v51.glb",
+      "position": [
+        10.0,
+        0,
+        -10.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -151.98394775390625,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          158.7105255126953,
+          120.9625015258789,
+          173.205078125
+        ],
+        "size": [
+          310.69447326660156,
+          143.9625015258789,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "08_RADAK_v13",
+      "name": "RADAK",
+      "low": "assets/models/low/08_RADAK_v13.glb",
+      "high": "assets/models/high/08_RADAK_v13.glb",
+      "position": [
+        -10.0,
+        0,
+        -20.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          83.96666717529297,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          106.96666717529297,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    },
+    {
+      "id": "09_ATSO_Norderney_v28",
+      "name": "ATSO Norderney",
+      "low": "assets/models/low/09_ATSO_Norderney_v28.glb",
+      "high": "assets/models/high/09_ATSO_Norderney_v28.glb",
+      "position": [
+        0.0,
+        0,
+        -20.0
+      ],
+      "rotationY": 0,
+      "scale": 0.00866,
+      "modelYOffset": 23.0,
+      "bbox": {
+        "min": [
+          -150.0,
+          -23.0,
+          -173.205078125
+        ],
+        "max": [
+          150.0,
+          253.77230834960938,
+          173.205078125
+        ],
+        "size": [
+          300.0,
+          276.7723083496094,
+          346.41015625
+        ]
+      },
+      "units_note": "STEP source carries no reliable unit metadata; `scale` is a placeholder normalizing the model's largest bbox dimension to 3.0m - hand-calibrate against the real instrument's known dimensions before treating this as accurate."
+    }
+  ]
+}
