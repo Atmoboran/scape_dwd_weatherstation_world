@@ -12,18 +12,29 @@ your thumb lands), the right half of the screen is drag-to-look, `RUN` toggles s
 and the `Inspect` prompt opens a station's info card when you're close enough.
 
 **Desktop:** `WASD` / arrow keys to walk, mouse to look (click to capture the pointer,
-`Esc` to release), `Shift` to run, `E` to inspect a station.
+`Esc` to release), `Shift` to run, `E` to inspect a station, `C` for the weather picker.
+`C` is the shortcut because while the pointer is locked the browser sends every mouse
+event to the canvas, so the on-screen button can't be clicked.
 
 Both input schemes are always live, so a touch laptop works either way. The start screen
 shows the right control list for the device you're on.
 
 ## The walk
 
-The eight stations stand in one packed row along a gravel walkway. Each has a coloured
-beacon and a floating nameplate; walking up to one logs it (`stations found` counter,
+The eight stations stand in one packed row along a gravel walkway, and you can walk up
+onto each one's base platform. Walking up to a station logs it (`stations found` counter,
 top-left), and the minimap top-right shows which ones you've still got to visit - hollow
 dots are unvisited, filled dots are logged. Inspecting a station opens a card with what
 it is and what it measures.
+
+## Weather
+
+The cloud button (top right, or `C` on desktop) switches between clear, overcast, rain,
+thunder, snow and fog. Each preset drives sky colour, fog distance, sun and ambient
+light, ground/walkway texture (dry, wet, snow-covered) and precipitation; thunder adds
+lightning flashes. Transitions are eased rather than cut, and the choice is remembered
+in `localStorage`. Presets live in `src/weather.js` - add one by appending to
+`WEATHER_PRESETS`.
 
 ## Running locally
 

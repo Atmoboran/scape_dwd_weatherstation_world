@@ -25,6 +25,7 @@ export class PlayerController {
     this.running = false;
     this.bobPhase = 0;
     this.enabled = false;
+    this.floorY = 0;
     this.keys = new Set();
     this.usingPointerLock = false;
 
@@ -47,6 +48,7 @@ export class PlayerController {
     this.position.set(x, EYE_HEIGHT, z);
     this.yaw = yaw;
     this.pitch = 0;
+    this.floorY = 0;
     this.camera.position.copy(this.position);
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.set(0, yaw, 0);
@@ -196,8 +198,12 @@ export class PlayerController {
     return { forward, strafe };
   }
 
-  /** Advances the player by `dt` seconds and writes the result to the camera. */
-  update(dt, resolveCollisions) {
+  /**
+   * Advances the player by `dt` seconds and writes the result to the camera.
+   * `sampleFloor(x, z)` returns the ground height there, so the player can step up
+   * onto station platforms.
+   */
+  update(dt, sampleFloor) {
     if (!this.enabled) return;
 
     // Touch look drives yaw/pitch directly; pointer lock drives the camera itself,
@@ -223,7 +229,13 @@ export class PlayerController {
       moving = true;
     }
 
-    resolveCollisions(this.position);
+    // Eased so stepping onto a platform reads as a step up, not a teleport.
+    this.floorY = THREE.MathUtils.damp(
+      this.floorY,
+      sampleFloor(this.position.x, this.position.z),
+      9,
+      dt
+    );
 
     // Head bob: only while actually walking, eased back to rest otherwise.
     if (moving) {
@@ -233,7 +245,7 @@ export class PlayerController {
     }
     const bob = moving ? Math.sin(this.bobPhase) * BOB_AMPLITUDE * (this.running ? 1.4 : 1) : 0;
 
-    this.camera.position.set(this.position.x, EYE_HEIGHT + bob, this.position.z);
+    this.camera.position.set(this.position.x, this.floorY + EYE_HEIGHT + bob, this.position.z);
     if (!this.usingPointerLock) {
       this.camera.rotation.order = 'YXZ';
       this.camera.rotation.set(this.pitch, this.yaw, 0);

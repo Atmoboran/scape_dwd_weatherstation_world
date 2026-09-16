@@ -29,11 +29,13 @@ export function showStartScreen() {
     ? `<div class="row"><span class="k">Left</span> drag the stick to walk</div>
        <div class="row"><span class="k">Right</span> drag anywhere to look around</div>
        <div class="row"><span class="k">Run</span> tap to toggle sprint</div>
-       <div class="row"><span class="k">Tap</span> the prompt to inspect a station</div>`
+       <div class="row"><span class="k">Tap</span> the prompt to inspect a station</div>
+       <div class="row"><span class="k">&#9925;</span> top right changes the weather</div>`
     : `<div class="row"><span class="k">W A S D</span> walk</div>
        <div class="row"><span class="k">Mouse</span> look around</div>
        <div class="row"><span class="k">Shift</span> run</div>
-       <div class="row"><span class="k">E</span> inspect a station &nbsp;<span class="k">Esc</span> release cursor</div>`;
+       <div class="row"><span class="k">E</span> inspect a station</div>
+       <div class="row"><span class="k">C</span> change the weather &nbsp;<span class="k">Esc</span> release cursor</div>`;
 
   loadingEl.classList.add('fade');
   setTimeout(() => loadingEl.classList.add('hidden'), 500);
@@ -127,6 +129,53 @@ export function onPanelClose(handler) {
     closePanel();
     handler?.();
   });
+}
+
+const settingsBtn = el('settings-btn');
+const settingsPanel = el('settings-panel');
+const weatherOptions = el('weather-options');
+
+/** Builds the weather picker. `onSelect(id)` fires on every choice. */
+export function initSettings(presets, currentId, onSelect, onOpen) {
+  weatherOptions.innerHTML = presets
+    .map(
+      (p) =>
+        `<button type="button" data-id="${p.id}" class="${p.id === currentId ? 'active' : ''}">
+           <span>${p.icon}</span><span>${p.label}</span>
+         </button>`
+    )
+    .join('');
+
+  weatherOptions.addEventListener('click', (e) => {
+    const button = e.target.closest('button');
+    if (!button) return;
+    for (const b of weatherOptions.querySelectorAll('button')) {
+      b.classList.toggle('active', b === button);
+    }
+    onSelect(button.dataset.id);
+  });
+
+  const toggle = () => {
+    const opening = !settingsPanel.classList.contains('open');
+    settingsPanel.classList.toggle('open', opening);
+    // Opening releases the pointer; while it's locked the browser sends every mouse
+    // event to the canvas and the picker can't be clicked at all.
+    if (opening) onOpen?.();
+  };
+
+  settingsBtn.addEventListener('click', toggle);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyC') toggle();
+  });
+
+  // Tapping the world dismisses the panel.
+  document.querySelector('#app').addEventListener('pointerdown', () => {
+    settingsPanel.classList.remove('open');
+  });
+}
+
+export function isSettingsOpen() {
+  return settingsPanel.classList.contains('open');
 }
 
 /** Top-down radar, rotated so the player always faces "up". */

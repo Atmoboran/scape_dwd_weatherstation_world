@@ -49,6 +49,32 @@
   }
   #minimap { display: block; width: 104px; height: 104px; }
 
+  #settings-btn {
+    position: absolute; top: calc(130px + env(safe-area-inset-top, 0px)); right: 12px;
+    width: 46px; height: 46px; border-radius: 13px; pointer-events: auto; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; padding: 0;
+  }
+  #settings-panel {
+    position: absolute; top: calc(184px + env(safe-area-inset-top, 0px)); right: 12px;
+    width: 178px; background: var(--panel); border: 1px solid var(--stroke);
+    border-radius: 14px; padding: 12px; backdrop-filter: blur(10px); pointer-events: auto;
+    opacity: 0; transform: translateY(-6px) scale(0.97); transform-origin: top right;
+    transition: opacity 0.18s, transform 0.18s; visibility: hidden;
+  }
+  #settings-panel.open { opacity: 1; transform: none; visibility: visible; }
+  #settings-panel .title {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 9px;
+  }
+  #weather-options { display: flex; flex-direction: column; gap: 5px; }
+  #weather-options button {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px;
+    border-radius: 9px; border: 1px solid transparent; background: rgba(255,255,255,0.06);
+    color: var(--text); font: inherit; font-size: 13.5px; cursor: pointer; text-align: left;
+  }
+  #weather-options button.active { background: rgba(95,176,255,0.2); border-color: var(--accent); }
+
   #crosshair {
     position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
     border-radius: 50%; background: rgba(255,255,255,0.75); box-shadow: 0 0 0 1.5px rgba(0,0,0,0.35);
@@ -199,6 +225,12 @@
     </div>
 
     <div id="minimap-wrap"><canvas id="minimap" width="208" height="208"></canvas></div>
+
+    <button id="settings-btn" type="button" aria-label="Weather settings">&#9925;</button>
+    <div id="settings-panel">
+      <div class="title">Weather</div>
+      <div id="weather-options"></div>
+    </div>
 
     <div id="crosshair"></div>
 

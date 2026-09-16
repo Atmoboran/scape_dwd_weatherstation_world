@@ -18,55 +18,6 @@ function stationMaterial(accent) {
   });
 }
 
-function makeBeacon(accent) {
-  const group = new THREE.Group();
-  const color = new THREE.Color(accent);
-
-  const beamMat = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.24, 9, 8, 1, true), beamMat);
-  beam.position.y = 4.5;
-  group.add(beam);
-
-  const markerMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
-  const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.34), markerMat);
-  marker.position.y = 9;
-  group.add(marker);
-
-  group.userData = { beam, marker, beamMat, markerMat };
-  return group;
-}
-
-function makeNameplate(text, accent) {
-  const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = 'rgba(10, 15, 22, 0.82)';
-  g.roundRect(6, 24, 500, 80, 18);
-  g.fill();
-  g.fillStyle = accent;
-  g.fillRect(6, 24, 8, 80);
-  g.font = '600 40px system-ui, sans-serif';
-  g.fillStyle = '#eaf0f8';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(text, 262, 65, 460);
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })
-  );
-  sprite.scale.set(4.6, 1.15, 1);
-  return sprite;
-}
-
 /** Horizontal distance from a point to the edge of a station's footprint (0 if inside). */
 export function edgeDistance(entry, point) {
   const { center, halfExtents } = entry.collider;
@@ -106,20 +57,10 @@ export class InstrumentRegistry {
       meshAnchor.position.fromArray(def.modelOffset ?? [0, 0, 0]);
       inner.add(meshAnchor);
 
-      const beacon = makeBeacon(def.accent);
-      beacon.position.y = def.height ?? 4;
-      group.add(beacon);
-
-      const nameplate = makeNameplate(def.name, def.accent);
-      nameplate.position.set(0, Math.max(def.height ?? 4, 3.5) + 2.6, 0);
-      group.add(nameplate);
-
       const entry = {
         def,
         group,
         meshAnchor,
-        beacon,
-        nameplate,
         material: stationMaterial(def.accent),
         lowMesh: null,
         highMesh: null,
@@ -152,8 +93,8 @@ export class InstrumentRegistry {
     });
   }
 
-  /** Call once per frame: LOD swapping plus beacon animation. */
-  update(playerPos, elapsed) {
+  /** Call once per frame to swap LOD tiers as the player moves. */
+  update(playerPos) {
     for (const entry of this.instruments) {
       const dist = playerPos.distanceTo(entry.group.position);
 
@@ -162,16 +103,6 @@ export class InstrumentRegistry {
       } else if (entry.highMesh && dist > HIGH_LOD_EXIT_DIST) {
         this._unloadHigh(entry);
       }
-
-      const { marker, beamMat, markerMat } = entry.beacon.userData;
-      marker.rotation.y = elapsed * 1.1;
-      marker.position.y = 9 + Math.sin(elapsed * 1.6) * 0.3;
-      // Found stations keep a dim marker; unfound ones pulse to pull the player over.
-      markerMat.opacity = entry.discovered ? 0.22 : 0.65 + Math.sin(elapsed * 2.4) * 0.3;
-      beamMat.opacity = entry.discovered ? 0.04 : 0.14;
-
-      // Nameplates: readable up close, faded out before they clutter the horizon.
-      entry.nameplate.material.opacity = THREE.MathUtils.clamp((46 - dist) / 14, 0, 1);
     }
   }
 

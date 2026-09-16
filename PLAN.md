@@ -27,7 +27,7 @@
   external library) both implemented in `src/player-controller.js`. Two-tier LOD + lazy
   loading/disposal in `src/instrument-registry.js` (load low-LOD for every instrument up front,
   swap in high-LOD within 15m, dispose it again past 20m, cap at 2 concurrent in-flight loads).
-  Bounding-box collision in `src/collision.js`. Loading screen + proximity name label in
+  Ground/step height in `src/terrain.js`. Loading screen + proximity name label in
   `src/ui.js`. Verified end-to-end with headless Chromium (desktop + mobile-emulated): scene
   renders, WASD/joystick movement, collision, proximity label, and high-LOD hot-swap all confirmed
   working, zero console errors.
@@ -45,6 +45,17 @@
   proximity info cards with description + measured quantities, head-bob, blob shadows,
   a gradient sky and a procedural ground. Proximity is measured to the footprint edge
   rather than the centre, since the platforms are ~8m wide.
+- **Weather + walkable platforms (done, later pass):** `src/weather.js` adds six switchable
+  presets (clear, overcast, rain, thunder, snow, fog) driving sky gradient, fog distance,
+  sun/hemisphere/ambient light, ground and walkway textures (dry/wet/snow) and GPU-cheap
+  `THREE.Points` precipitation that follows the player; thunder adds lightning flashes.
+  Transitions are eased, and the choice persists in `localStorage`. Picked from an in-world
+  settings button (or `C` on desktop, since a locked pointer makes the button unclickable).
+  Stations are now **walkable**: instead of blocking the footprint, `src/terrain.js` raises
+  the player onto each station's base slab, whose height is measured offline by
+  `deck_height()` in the manifest generator (largest upward-facing surface area) so the
+  runtime never raycasts CAD triangle soup on a phone. The 3D nameplates and beacon light
+  columns were removed as visual clutter at the user's request.
 - **Still open:** instrument #3 (Windprofiler) conversion; hand-calibrating per-instrument `scale`
   against real dimensions; actual GitHub Pages hosting switch-on (Settings → Pages); real-device
   (not just emulated) mobile testing; instrument info panels beyond the name label; optional CI

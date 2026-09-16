@@ -32,7 +32,8 @@
         6.928,
         8.0
       ],
-      "height": 4.373
+      "height": 4.373,
+      "deckHeight": 0.531
     },
     {
       "id": "02_Sturmwarn_Lindau_v17",
@@ -63,7 +64,8 @@
         6.928,
         8.0
       ],
-      "height": 3.559
+      "height": 3.559,
+      "deckHeight": 0.531
     },
     {
       "id": "04_AMDA_v38",
@@ -96,7 +98,8 @@
         6.928,
         8.0
       ],
-      "height": 7.154
+      "height": 7.154,
+      "deckHeight": 0.531
     },
     {
       "id": "05_Meer_v4",
@@ -128,7 +131,8 @@
         6.928,
         8.0
       ],
-      "height": 0.554
+      "height": 0.554,
+      "deckHeight": 0.531
     },
     {
       "id": "06_MME_v9",
@@ -160,7 +164,8 @@
         6.928,
         8.0
       ],
-      "height": 4.42
+      "height": 4.42,
+      "deckHeight": 0.0
     },
     {
       "id": "07_Airport_v51",
@@ -192,7 +197,8 @@
         7.175,
         8.0
       ],
-      "height": 3.325
+      "height": 3.325,
+      "deckHeight": 0.531
     },
     {
       "id": "08_RADAK_v13",
@@ -223,7 +229,8 @@
         6.928,
         8.0
       ],
-      "height": 2.47
+      "height": 2.47,
+      "deckHeight": 0.531
     },
     {
       "id": "09_ATSO_Norderney_v28",
@@ -255,7 +262,8 @@
         6.928,
         8.0
       ],
-      "height": 6.392
+      "height": 6.392,
+      "deckHeight": 0.531
     }
   ]
 }

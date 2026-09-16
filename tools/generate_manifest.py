@@ -116,6 +116,33 @@ INFO = {
 }
 
 
+def deck_height(mesh, bbox_min) -> float:
+    """Height of the station's base platform above the model's own bottom, in raw units.
+
+    Every station sits on one big flat slab, so the upward-facing surface with the
+    largest total area is that deck. The runtime uses this to let the player step up
+    onto the platform without raycasting CAD triangle soup on a phone.
+    """
+    normals = mesh.face_normals
+    up = normals[:, 1] > 0.95
+    if not up.any():
+        return 0.0
+
+    areas = mesh.area_faces[up]
+    heights = mesh.vertices[mesh.faces[up]][:, :, 1].mean(axis=1)
+
+    # Bin to 1/500th of the model's height so one slab's triangles land together.
+    span = max(mesh.bounds[1][1] - bbox_min[1], 1e-6)
+    bin_size = span / 500
+    totals = {}
+    for h, a in zip(heights, areas):
+        key = round(h / bin_size)
+        totals[key] = totals.get(key, 0.0) + a
+
+    best = max(totals, key=totals.get)
+    return max((best * bin_size) - bbox_min[1], 0.0)
+
+
 def pretty_name(stem: str) -> str:
     # "07_Airport_v51" -> "Airport"
     name = re.sub(r"^\d+_", "", stem)
@@ -142,14 +169,15 @@ def main():
         bbox_max = mesh.bounds[1].tolist()
         size = [bbox_max[i] - bbox_min[i] for i in range(3)]
         scale = TARGET_MAX_DIM_M / (max(size) or 1.0)
-        entries.append((stem, low_path.name, bbox_min, bbox_max, size, scale))
+        deck = deck_height(mesh, bbox_min)
+        entries.append((stem, low_path.name, bbox_min, bbox_max, size, scale, deck))
 
     # Pack the stations into one row along X, footprints adjacent with a fixed gap.
     total_width = sum(e[4][0] * e[5] for e in entries) + GAP_M * (len(entries) - 1)
     cursor = -total_width / 2
 
     instruments = []
-    for i, (stem, filename, bbox_min, bbox_max, size, scale) in enumerate(entries):
+    for i, (stem, filename, bbox_min, bbox_max, size, scale, deck) in enumerate(entries):
         footprint = [size[0] * scale, size[2] * scale]
         x = cursor + footprint[0] / 2
         cursor += footprint[0] + GAP_M
@@ -177,6 +205,8 @@ def main():
                 ],
                 "footprint": [round(footprint[0], 3), round(footprint[1], 3)],
                 "height": round(size[1] * scale, 3),
+                # Top of the base slab, in world meters - the step the player walks up.
+                "deckHeight": round(deck * scale, 3),
             }
         )
 

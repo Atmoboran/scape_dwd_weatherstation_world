@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { PlayerController, hasTouch } from './player-controller.js';
 import { InstrumentRegistry, edgeDistance } from './instrument-registry.js';
-import { resolveCollisions } from './collision.js';
+import { floorHeightAt } from './terrain.js';
+import { Weather, WEATHER_PRESETS } from './weather.js';
 import * as ui from './ui.js';
 
-const SKY_TOP = new THREE.Color(0x4f86c6);
-const SKY_HORIZON = new THREE.Color(0xc8dcee);
+const WEATHER_STORAGE_KEY = 'meteo-walk.weather';
 
 // All measured from the edge of a station's footprint, not its centre.
 const DISCOVER_DIST = 3; // meters: walking this close marks a station found
@@ -13,7 +13,7 @@ const INTERACT_DIST = 6; // meters: close enough to open the info panel
 const LABEL_DIST = 22;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(SKY_HORIZON, 45, 190);
+scene.fog = new THREE.Fog(0xc8dcee, 45, 190);
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 400);
 
@@ -37,7 +37,10 @@ const sky = new THREE.Mesh(
   new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: { top: { value: SKY_TOP }, horizon: { value: SKY_HORIZON } },
+    uniforms: {
+      top: { value: new THREE.Color(0x4f86c6) },
+      horizon: { value: new THREE.Color(0xc8dcee) },
+    },
     vertexShader: `
       varying float vH;
       void main() {
@@ -54,11 +57,13 @@ const sky = new THREE.Mesh(
 scene.add(sky);
 
 // --- lighting: one sun + sky fill, no real-time shadows (mobile perf) ---
-scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.15));
+const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.15);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff4e0, 2.0);
 sun.position.set(30, 45, 18);
 scene.add(sun);
-scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+scene.add(ambient);
 
 // --- procedural speckle texture: gives grass and gravel some grain, no image download ---
 function speckleTexture(base, speck, repeat) {
@@ -79,15 +84,39 @@ function speckleTexture(base, speck, repeat) {
   return tex;
 }
 
+const GROUND_MAPS = {
+  grass: speckleTexture('#8ba869', '#6b8a4d', 160),
+  wet: speckleTexture('#6f8a55', '#53683e', 160),
+  snow: speckleTexture('#eef3f7', '#d3dde6', 160),
+};
+const PATH_MAPS = {
+  grass: speckleTexture('#b9ae98', '#9a8f79', 1),
+  wet: speckleTexture('#8f8672', '#6f6757', 1),
+  snow: speckleTexture('#e6ebf0', '#c9d2da', 1),
+};
+
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(600, 600),
-  new THREE.MeshStandardMaterial({
-    map: speckleTexture('#8ba869', '#6b8a4d', 160),
-    roughness: 1,
-  })
+  new THREE.MeshStandardMaterial({ map: GROUND_MAPS.grass, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
+
+let pathMaterial = null;
+
+/** Swaps ground/walkway textures when the weather changes (dry, wet, snow-covered). */
+function applyGroundStyle(style) {
+  ground.material.map = GROUND_MAPS[style] ?? GROUND_MAPS.grass;
+  ground.material.needsUpdate = true;
+  if (pathMaterial) {
+    const map = PATH_MAPS[style] ?? PATH_MAPS.grass;
+    map.repeat.copy(PATH_MAPS.grass.repeat);
+    pathMaterial.map = map;
+    pathMaterial.needsUpdate = true;
+  }
+}
+
+const weather = new Weather(scene, { sky, sun, hemi, ambient }, applyGroundStyle);
 
 function blobTexture() {
   const c = document.createElement('canvas');
@@ -107,18 +136,18 @@ const registry = new InstrumentRegistry(scene);
 const clock = new THREE.Clock();
 
 let nearest = null;
-const collide = (position) => resolveCollisions(registry.instruments, position);
+const sampleFloor = (x, z) => floorHeightAt(registry.instruments, x, z);
 
 function addSceneDressing(instruments) {
   // Gravel walkway running the length of the row, so there's an obvious route to follow.
   const minX = Math.min(...instruments.map((e) => e.group.position.x)) - 8;
   const maxX = Math.max(...instruments.map((e) => e.group.position.x)) + 8;
-  const pathTex = speckleTexture('#b9ae98', '#9a8f79', 1);
-  pathTex.repeat.set((maxX - minX) / 3, 1.2);
+  for (const map of Object.values(PATH_MAPS)) map.repeat.set((maxX - minX) / 3, 1.2);
   const path = new THREE.Mesh(
     new THREE.PlaneGeometry(maxX - minX, 3.4),
-    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 1 })
+    new THREE.MeshStandardMaterial({ map: PATH_MAPS.grass, roughness: 1 })
   );
+  pathMaterial = path.material;
   path.rotation.x = -Math.PI / 2;
   path.position.set((minX + maxX) / 2, 0.012, 6.5);
   scene.add(path);
@@ -159,6 +188,31 @@ registry
       if (!hasTouch) player.controls.lock();
     });
 
+    let savedWeather = null;
+    try {
+      savedWeather = localStorage.getItem(WEATHER_STORAGE_KEY);
+    } catch {
+      // private mode / blocked storage: just start on the default preset
+    }
+    if (savedWeather) weather.apply(savedWeather, true);
+
+    ui.initSettings(
+      WEATHER_PRESETS,
+      weather.currentId,
+      (id) => {
+        weather.apply(id);
+        try {
+          localStorage.setItem(WEATHER_STORAGE_KEY, id);
+        } catch {
+          // non-fatal: the choice just won't persist
+        }
+      },
+      () => {
+        // Release the pointer so the picker is clickable on desktop.
+        if (!hasTouch) player.controls.unlock();
+      }
+    );
+
     // Start on the walkway at the near end of the row, looking down it (+X).
     const startX = Math.min(...instruments.map((e) => e.group.position.x)) - 9;
     player.spawnAt(startX, 6.5, -Math.PI / 2);
@@ -177,8 +231,9 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.1);
   const elapsed = clock.elapsedTime;
 
-  player.update(dt, collide);
-  registry.update(player.position, elapsed);
+  player.update(dt, sampleFloor);
+  registry.update(player.position);
+  weather.update(dt, elapsed, camera.position);
   sky.position.copy(camera.position);
 
   nearest = registry.findNearest(player.position, LABEL_DIST);
