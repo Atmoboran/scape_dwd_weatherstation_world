@@ -1,19 +1,20 @@
 import * as THREE from 'three';
+import { theme } from './theme.js';
 
 /**
  * Weather presets drive sky colour, fog, lighting and precipitation. Values are
  * eased toward the target every frame, so switching weather is a transition rather
  * than a cut.
+ *
+ * Behaviour lives here; the colours come from the active theme
+ * (`theme.scene.weather[id]`), so a theme restyles the sky without touching this file.
  */
 export const WEATHER_PRESETS = [
   {
     id: 'clear',
     label: 'Clear',
     icon: '☀️',
-    skyTop: 0x3f7fc4,
-    skyHorizon: 0xcfe2f2,
     fog: [45, 190],
-    sunColor: 0xfff4e0,
     sunIntensity: 2.0,
     hemiIntensity: 1.15,
     ambientIntensity: 0.25,
@@ -23,10 +24,7 @@ export const WEATHER_PRESETS = [
     id: 'cloudy',
     label: 'Overcast',
     icon: '☁️',
-    skyTop: 0x8b9dad,
-    skyHorizon: 0xc3ccd4,
     fog: [35, 150],
-    sunColor: 0xe8eef5,
     sunIntensity: 0.5,
     hemiIntensity: 1.05,
     ambientIntensity: 0.5,
@@ -36,10 +34,7 @@ export const WEATHER_PRESETS = [
     id: 'rain',
     label: 'Rain',
     icon: '\u{1F327}️',
-    skyTop: 0x59656f,
-    skyHorizon: 0x8c979e,
     fog: [22, 100],
-    sunColor: 0xc9d4de,
     sunIntensity: 0.28,
     hemiIntensity: 0.8,
     ambientIntensity: 0.42,
@@ -50,10 +45,7 @@ export const WEATHER_PRESETS = [
     id: 'storm',
     label: 'Thunder',
     icon: '⛈️',
-    skyTop: 0x353d46,
-    skyHorizon: 0x646d76,
     fog: [16, 78],
-    sunColor: 0xb6c2cd,
     sunIntensity: 0.18,
     hemiIntensity: 0.6,
     ambientIntensity: 0.34,
@@ -65,10 +57,7 @@ export const WEATHER_PRESETS = [
     id: 'snow',
     label: 'Snow',
     icon: '❄️',
-    skyTop: 0x93a4b3,
-    skyHorizon: 0xdde5ea,
     fog: [20, 90],
-    sunColor: 0xeef4ff,
     sunIntensity: 0.55,
     hemiIntensity: 1.15,
     ambientIntensity: 0.55,
@@ -79,10 +68,7 @@ export const WEATHER_PRESETS = [
     id: 'fog',
     label: 'Fog',
     icon: '\u{1F32B}️',
-    skyTop: 0xb3bcc2,
-    skyHorizon: 0xccd3d7,
     fog: [4, 38],
-    sunColor: 0xdfe6ea,
     sunIntensity: 0.3,
     hemiIntensity: 0.95,
     ambientIntensity: 0.55,
@@ -230,6 +216,12 @@ export class Weather {
     return this.preset.id;
   }
 
+  /** Theme colours for a preset, falling back to the first one if a theme omits it. */
+  _colors(id) {
+    const table = theme.scene.weather;
+    return table[id] ?? Object.values(table)[0];
+  }
+
   apply(id, immediate = false) {
     const preset = WEATHER_PRESETS.find((p) => p.id === id) ?? WEATHER_PRESETS[0];
     this.preset = preset;
@@ -247,9 +239,10 @@ export class Weather {
     }
 
     if (immediate) {
-      this.skyTop.setHex(preset.skyTop);
-      this.skyHorizon.setHex(preset.skyHorizon);
-      this.sunColor.setHex(preset.sunColor);
+      const colors = this._colors(preset.id);
+      this.skyTop.set(colors.skyTop);
+      this.skyHorizon.set(colors.skyHorizon);
+      this.sunColor.set(colors.sunColor);
       this.sun.intensity = preset.sunIntensity;
       this.hemi.intensity = preset.hemiIntensity;
       this.ambient.intensity = preset.ambientIntensity;
@@ -264,10 +257,11 @@ export class Weather {
   update(dt, elapsed, cameraPos) {
     const p = this.preset;
     const k = 3.2; // easing rate for weather transitions
+    const colors = this._colors(p.id);
 
-    this.skyTop.lerp(new THREE.Color(p.skyTop), Math.min(dt * k, 1));
-    this.skyHorizon.lerp(new THREE.Color(p.skyHorizon), Math.min(dt * k, 1));
-    this.sunColor.lerp(new THREE.Color(p.sunColor), Math.min(dt * k, 1));
+    this.skyTop.lerp(new THREE.Color(colors.skyTop), Math.min(dt * k, 1));
+    this.skyHorizon.lerp(new THREE.Color(colors.skyHorizon), Math.min(dt * k, 1));
+    this.sunColor.lerp(new THREE.Color(colors.sunColor), Math.min(dt * k, 1));
 
     this.sun.intensity = THREE.MathUtils.damp(this.sun.intensity, p.sunIntensity, k, dt);
     this.hemi.intensity = THREE.MathUtils.damp(this.hemi.intensity, p.hemiIntensity, k, dt);

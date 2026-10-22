@@ -56,6 +56,20 @@
   `deck_height()` in the manifest generator (largest upward-facing surface area) so the
   runtime never raycasts CAD triangle soup on a phone. The 3D nameplates and beacon light
   columns were removed as visual clutter at the user's request.
+- **SCAPE° design system + scattered layout (done, later pass):** the whole visual
+  identity was extracted into an interchangeable design layer under `src/themes/`
+  (`theme.js` resolves one via `?theme=`, applies its tokens as CSS custom properties
+  and renders its start-screen artwork). A theme owns every colour, the font stack, all
+  UI copy, the 3D palette, the weather colours and the ground treatment; nothing else in
+  `src/` hard-codes a colour or a label. `themes/scape.js` implements the SCAPE°
+  corporate design (Founders Grotesk with a flagged fallback, caps headlines / mixed-case
+  body, palette-only colour with strong tones against pastels, flat hard-edged fields,
+  and the three-layer graphic system as the start screen plus flat colour fields on the
+  ground); `themes/plain.js` keeps the previous neutral look as a second implementation
+  that proves the contract. Exhibit copy is now German. Stations are no longer in a row:
+  `scatter()` in the manifest generator rejection-samples non-overlapping positions in a
+  disc with a seeded RNG, keeps the middle clear for the spawn, and gives each station a
+  random heading.
 - **Still open:** instrument #3 (Windprofiler) conversion; hand-calibrating per-instrument `scale`
   against real dimensions; actual GitHub Pages hosting switch-on (Settings → Pages); real-device
   (not just emulated) mobile testing; instrument info panels beyond the name label; optional CI

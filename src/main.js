@@ -3,6 +3,7 @@ import { PlayerController, hasTouch } from './player-controller.js';
 import { InstrumentRegistry, edgeDistance } from './instrument-registry.js';
 import { floorHeightAt } from './terrain.js';
 import { Weather, WEATHER_PRESETS } from './weather.js';
+import { theme, applyTheme } from './theme.js';
 import * as ui from './ui.js';
 
 const WEATHER_STORAGE_KEY = 'meteo-walk.weather';
@@ -10,10 +11,17 @@ const WEATHER_STORAGE_KEY = 'meteo-walk.weather';
 // All measured from the edge of a station's footprint, not its centre.
 const DISCOVER_DIST = 3; // meters: walking this close marks a station found
 const INTERACT_DIST = 6; // meters: close enough to open the info panel
-const LABEL_DIST = 22;
+const LABEL_DIST = 26;
+
+const DECAL_SEED = 1337;
+
+applyTheme();
+ui.initCopy();
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xc8dcee, 45, 190);
+// Fog and sky colours are placeholders: Weather overwrites them from the theme on
+// construction, before the first frame is drawn.
+scene.fog = new THREE.Fog(0xffffff, 45, 190);
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 400);
 
@@ -38,8 +46,8 @@ const sky = new THREE.Mesh(
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      top: { value: new THREE.Color(0x4f86c6) },
-      horizon: { value: new THREE.Color(0xc8dcee) },
+      top: { value: new THREE.Color(0xffffff) },
+      horizon: { value: new THREE.Color(0xffffff) },
     },
     vertexShader: `
       varying float vH;
@@ -57,15 +65,19 @@ const sky = new THREE.Mesh(
 scene.add(sky);
 
 // --- lighting: one sun + sky fill, no real-time shadows (mobile perf) ---
-const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.15);
+const hemi = new THREE.HemisphereLight(
+  theme.scene.hemisphere.sky,
+  theme.scene.hemisphere.ground,
+  1.15
+);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff4e0, 2.0);
+const sun = new THREE.DirectionalLight(0xffffff, 2.0);
 sun.position.set(30, 45, 18);
 scene.add(sun);
 const ambient = new THREE.AmbientLight(0xffffff, 0.25);
 scene.add(ambient);
 
-// --- procedural speckle texture: gives grass and gravel some grain, no image download ---
+// --- procedural speckle texture: gives the ground some grain, no image download ---
 function speckleTexture(base, speck, repeat) {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
@@ -84,16 +96,12 @@ function speckleTexture(base, speck, repeat) {
   return tex;
 }
 
-const GROUND_MAPS = {
-  grass: speckleTexture('#8ba869', '#6b8a4d', 160),
-  wet: speckleTexture('#6f8a55', '#53683e', 160),
-  snow: speckleTexture('#eef3f7', '#d3dde6', 160),
-};
-const PATH_MAPS = {
-  grass: speckleTexture('#b9ae98', '#9a8f79', 1),
-  wet: speckleTexture('#8f8672', '#6f6757', 1),
-  snow: speckleTexture('#e6ebf0', '#c9d2da', 1),
-};
+const GROUND_MAPS = Object.fromEntries(
+  Object.entries(theme.scene.groundStyles).map(([style, { base, speck }]) => [
+    style,
+    speckleTexture(base, speck, 160),
+  ])
+);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(600, 600),
@@ -102,18 +110,10 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-let pathMaterial = null;
-
-/** Swaps ground/walkway textures when the weather changes (dry, wet, snow-covered). */
+/** Swaps the ground texture when the weather changes (dry, wet, snow-covered). */
 function applyGroundStyle(style) {
   ground.material.map = GROUND_MAPS[style] ?? GROUND_MAPS.grass;
   ground.material.needsUpdate = true;
-  if (pathMaterial) {
-    const map = PATH_MAPS[style] ?? PATH_MAPS.grass;
-    map.repeat.copy(PATH_MAPS.grass.repeat);
-    pathMaterial.map = map;
-    pathMaterial.needsUpdate = true;
-  }
 }
 
 const weather = new Weather(scene, { sky, sun, hemi, ambient }, applyGroundStyle);
@@ -123,13 +123,12 @@ function blobTexture() {
   c.width = c.height = 128;
   const g = c.getContext('2d');
   const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
-  grad.addColorStop(0, 'rgba(0,0,0,0.42)');
+  grad.addColorStop(0, `rgba(0,0,0,${theme.scene.shadowOpacity})`);
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
-const SHADOW_TEX = blobTexture();
 
 const player = new PlayerController(camera, renderer.domElement);
 const registry = new InstrumentRegistry(scene);
@@ -138,30 +137,76 @@ const clock = new THREE.Clock();
 let nearest = null;
 const sampleFloor = (x, z) => floorHeightAt(registry.instruments, x, z);
 
-function addSceneDressing(instruments) {
-  // Gravel walkway running the length of the row, so there's an obvious route to follow.
-  const minX = Math.min(...instruments.map((e) => e.group.position.x)) - 8;
-  const maxX = Math.max(...instruments.map((e) => e.group.position.x)) + 8;
-  for (const map of Object.values(PATH_MAPS)) map.repeat.set((maxX - minX) / 3, 1.2);
-  const path = new THREE.Mesh(
-    new THREE.PlaneGeometry(maxX - minX, 3.4),
-    new THREE.MeshStandardMaterial({ map: PATH_MAPS.grass, roughness: 1 })
-  );
-  pathMaterial = path.material;
-  path.rotation.x = -Math.PI / 2;
-  path.position.set((minX + maxX) / 2, 0.012, 6.5);
-  scene.add(path);
+/** Deterministic RNG, so the scenery is the same on every visit. */
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
 
+/**
+ * Flat colour fields and circles strewn over the grass: the theme's graphic system
+ * read from above. Hard-edged, unlit and stacked just above the ground plane.
+ */
+function addGroundDecals() {
+  const { enabled, rectCount, circleCount, palette } = theme.scene.decals;
+  if (!enabled) return;
+
+  const rand = seededRandom(DECAL_SEED);
+  const pick = () => palette[Math.floor(rand() * palette.length)];
+  let layer = 0.004;
+
+  // Keeps decals off the spawn clearing: at eye level a nearby flat field reads as a
+  // flood of colour across the whole screen rather than a mark on the ground.
+  const place = (mesh, minRadius) => {
+    for (let tries = 0; tries < 40; tries++) {
+      const x = (rand() - 0.5) * 190;
+      const z = (rand() - 0.5) * 190;
+      if (Math.hypot(x, z) < minRadius) continue;
+      mesh.position.set(x, (layer += 0.002), z);
+      mesh.rotation.x = -Math.PI / 2;
+      scene.add(mesh);
+      return;
+    }
+  };
+
+  for (let i = 0; i < rectCount; i++) {
+    const geometry = new THREE.PlaneGeometry(6 + rand() * 12, 5 + rand() * 10);
+    place(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: pick() })), 22);
+  }
+
+  for (let i = 0; i < circleCount; i++) {
+    const geometry = new THREE.CircleGeometry(2.5 + rand() * 4.5, 40);
+    place(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: pick() })), 22);
+  }
+}
+
+/** A gravel-ish apron and a soft shadow under each station. */
+function addStationGrounding(instruments) {
+  const apronMat = new THREE.MeshBasicMaterial({ color: theme.scene.apron.color });
   const shadowMat = new THREE.MeshBasicMaterial({
-    map: SHADOW_TEX,
+    map: blobTexture(),
     transparent: true,
     depthWrite: false,
   });
+
   for (const entry of instruments) {
     const [w, d] = entry.def.footprint;
+    const { x, z } = entry.group.position;
+
+    const apron = new THREE.Mesh(
+      new THREE.CircleGeometry((Math.max(w, d) / 2) * theme.scene.apron.scale, 56),
+      apronMat
+    );
+    apron.rotation.x = -Math.PI / 2;
+    apron.position.set(x, 0.05, z);
+    scene.add(apron);
+
     const blob = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, d * 1.5), shadowMat);
     blob.rotation.x = -Math.PI / 2;
-    blob.position.set(entry.group.position.x, 0.02, entry.group.position.z);
+    blob.position.set(x, 0.06, z);
     scene.add(blob);
   }
 }
@@ -180,7 +225,8 @@ function inspectNearest() {
 registry
   .load('./assets/models/manifest.json', ui.setLoadingProgress)
   .then(async (instruments) => {
-    addSceneDressing(instruments);
+    addGroundDecals();
+    addStationGrounding(instruments);
     ui.initProgress(instruments);
     ui.updateProgress(instruments, 0);
     ui.onInteract(inspectNearest);
@@ -213,17 +259,23 @@ registry
       }
     );
 
-    // Start on the walkway at the near end of the row, looking down it (+X).
-    const startX = Math.min(...instruments.map((e) => e.group.position.x)) - 9;
-    player.spawnAt(startX, 6.5, -Math.PI / 2);
+    // Spawn in the clearing the layout keeps free, facing the nearest station.
+    const first = instruments.reduce((a, b) =>
+      a.group.position.length() <= b.group.position.length() ? a : b
+    );
+    player.spawnAt(0, 0, Math.atan2(-first.group.position.x, -first.group.position.z));
 
     await ui.showStartScreen();
     player.start();
-    ui.toast('Find all 8 stations', 'Walk up to one to log it', '#5fb0ff');
+    ui.toast(
+      theme.strings.hintTitle(instruments.length),
+      theme.strings.hintSub,
+      theme.scene.stationPalette[0]
+    );
   })
   .catch((err) => {
     console.error('failed to load the world', err);
-    document.getElementById('loading-hint').textContent = 'failed to load models - check the console';
+    ui.setLoadFailed();
   });
 
 function animate() {
@@ -246,12 +298,15 @@ function animate() {
     ui.updateProgress(registry.instruments, registry.foundCount);
     const remaining = registry.instruments.length - registry.foundCount;
     ui.toast(
-      `Logged: ${nearest.def.name}`,
-      remaining > 0 ? `${remaining} station${remaining > 1 ? 's' : ''} left` : 'Every station logged!',
-      nearest.def.accent
+      theme.strings.foundToast(nearest.def.name),
+      remaining > 0 ? theme.strings.remaining(remaining) : theme.strings.allFound,
+      nearest.accent
     );
     if (remaining === 0) {
-      setTimeout(() => ui.toast('Field survey complete', 'Nice walk.', '#6ee7a8'), 2800);
+      setTimeout(
+        () => ui.toast(theme.strings.completeTitle, theme.strings.completeSub, nearest.accent),
+        2800
+      );
     }
   }
 

@@ -1,6 +1,8 @@
 import { hasTouch } from './player-controller.js';
+import { theme } from './theme.js';
 
 const el = (id) => document.getElementById(id);
+const S = theme.strings;
 
 const loadingEl = el('loading');
 const startEl = el('start');
@@ -15,27 +17,43 @@ const totalCountEl = el('total-count');
 const pipsEl = el('pips');
 const minimap = el('minimap');
 const mmCtx = minimap.getContext('2d');
+const settingsBtn = el('settings-btn');
+const settingsPanel = el('settings-panel');
+const weatherOptions = el('weather-options');
 
-const MINIMAP_RANGE_M = 42; // world meters from centre to map edge
+const MINIMAP_RANGE_M = 46; // world meters from centre to map edge
+
+/** Writes the theme's static copy into the markup. Call once, before anything renders. */
+export function initCopy() {
+  el('found-label').textContent = S.foundLabel;
+  el('weather-title').textContent = S.weatherTitle;
+  el('start-headline').innerHTML = S.startHeadline.map((line) => `<div>${line}</div>`).join('');
+  el('start-intro').textContent = S.startIntro;
+  el('joystick-hint').textContent = S.controlsTouch[0][1];
+  el('look-hint').textContent = S.controlsTouch[1][1];
+  el('sprint-btn').textContent = S.controlsTouch[2][0];
+  el('loading-hint').textContent = S.loadingPrep;
+  settingsBtn.setAttribute('aria-label', S.weatherAria);
+  startEl.querySelector('.go').textContent = S.startButton;
+  interactEl.querySelector('.verb').textContent = S.interact;
+  panelEl.querySelector('button').textContent = S.panelClose;
+}
 
 export function setLoadingProgress(loaded, total) {
   barEl.style.width = `${total > 0 ? Math.round((loaded / total) * 100) : 0}%`;
-  loadingHintEl.textContent = `loading stations… ${loaded}/${total}`;
+  loadingHintEl.textContent = S.loadingStations(loaded, total);
+}
+
+export function setLoadFailed() {
+  loadingHintEl.textContent = S.loadFailed;
 }
 
 /** Swaps the loading screen for the start screen; resolves when the player enters. */
 export function showStartScreen() {
-  el('control-help').innerHTML = hasTouch
-    ? `<div class="row"><span class="k">Left</span> drag the stick to walk</div>
-       <div class="row"><span class="k">Right</span> drag anywhere to look around</div>
-       <div class="row"><span class="k">Run</span> tap to toggle sprint</div>
-       <div class="row"><span class="k">Tap</span> the prompt to inspect a station</div>
-       <div class="row"><span class="k">&#9925;</span> top right changes the weather</div>`
-    : `<div class="row"><span class="k">W A S D</span> walk</div>
-       <div class="row"><span class="k">Mouse</span> look around</div>
-       <div class="row"><span class="k">Shift</span> run</div>
-       <div class="row"><span class="k">E</span> inspect a station</div>
-       <div class="row"><span class="k">C</span> change the weather &nbsp;<span class="k">Esc</span> release cursor</div>`;
+  const controls = hasTouch ? S.controlsTouch : S.controlsDesktop;
+  el('control-help').innerHTML = controls
+    .map(([key, text]) => `<div class="row"><span class="k">${key}</span><span>${text}</span></div>`)
+    .join('');
 
   loadingEl.classList.add('fade');
   setTimeout(() => loadingEl.classList.add('hidden'), 500);
@@ -61,7 +79,7 @@ export function updateProgress(instruments, foundCount) {
   foundCountEl.textContent = String(foundCount);
   for (const entry of instruments) {
     const pip = pipsEl.querySelector(`[data-id="${entry.def.id}"]`);
-    if (pip) pip.style.background = entry.discovered ? entry.def.accent : 'rgba(255,255,255,0.18)';
+    if (pip) pip.style.background = entry.discovered ? entry.accent : '';
   }
 }
 
@@ -71,9 +89,8 @@ export function setNearestLabel(entry, distance) {
     return;
   }
   labelEl.querySelector('.name').textContent = entry.def.name;
-  labelEl.querySelector('.name').style.color = entry.discovered ? entry.def.accent : '';
   labelEl.querySelector('.dist').textContent =
-    distance < 1 ? 'you are here' : `${distance.toFixed(0)} m away`;
+    distance < 1 ? S.here : S.distance(distance.toFixed(0));
   labelEl.classList.add('visible');
 }
 
@@ -103,16 +120,16 @@ export function toast(title, sub, accent) {
 
 export function openPanel(entry) {
   const { def } = entry;
-  panelEl.querySelector('.accent-bar').style.background = def.accent;
+  panelEl.querySelector('.accent-bar').style.background = entry.accent;
   panelEl.querySelector('h2').textContent = def.name;
-  panelEl.querySelector('.source').textContent = `Source model: ${def.sourceName}`;
-  panelEl.querySelector('p').textContent = def.description || 'No description recorded yet.';
+  panelEl.querySelector('.source').textContent = S.panelSource(def.sourceName);
+  panelEl.querySelector('p').textContent = def.description || S.panelNoDescription;
   panelEl.querySelector('.chips').innerHTML = (def.measures || [])
     .map((m) => `<span class="chip">${m}</span>`)
     .join('');
   panelEl.querySelector('.stats').innerHTML = `
-    <div>Height<b>${def.height.toFixed(1)} m</b></div>
-    <div>Footprint<b>${def.footprint[0].toFixed(1)} × ${def.footprint[1].toFixed(1)} m</b></div>`;
+    <div>${S.statHeight}<b>${def.height.toFixed(1)} m</b></div>
+    <div>${S.statFootprint}<b>${def.footprint[0].toFixed(1)} × ${def.footprint[1].toFixed(1)} m</b></div>`;
   panelEl.classList.add('open');
 }
 
@@ -131,17 +148,13 @@ export function onPanelClose(handler) {
   });
 }
 
-const settingsBtn = el('settings-btn');
-const settingsPanel = el('settings-panel');
-const weatherOptions = el('weather-options');
-
 /** Builds the weather picker. `onSelect(id)` fires on every choice. */
 export function initSettings(presets, currentId, onSelect, onOpen) {
   weatherOptions.innerHTML = presets
     .map(
       (p) =>
         `<button type="button" data-id="${p.id}" class="${p.id === currentId ? 'active' : ''}">
-           <span>${p.icon}</span><span>${p.label}</span>
+           <span>${p.icon}</span><span>${S.weatherLabels[p.id] ?? p.id}</span>
          </button>`
     )
     .join('');
@@ -174,8 +187,9 @@ export function initSettings(presets, currentId, onSelect, onOpen) {
   });
 }
 
-export function isSettingsOpen() {
-  return settingsPanel.classList.contains('open');
+/** Reads a themed CSS custom property. */
+function token(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 /** Top-down radar, rotated so the player always faces "up". */
@@ -188,11 +202,11 @@ export function drawMinimap(instruments, playerPos, heading) {
   mmCtx.save();
   mmCtx.beginPath();
   mmCtx.arc(mid, mid, mid - 2, 0, Math.PI * 2);
-  mmCtx.fillStyle = 'rgba(10,16,24,0.75)';
+  mmCtx.fillStyle = token('--minimap-bg');
   mmCtx.fill();
   mmCtx.clip();
 
-  mmCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+  mmCtx.strokeStyle = token('--minimap-ring');
   mmCtx.lineWidth = 2;
   for (const r of [0.45, 0.85]) {
     mmCtx.beginPath();
@@ -212,17 +226,17 @@ export function drawMinimap(instruments, playerPos, heading) {
     mmCtx.beginPath();
     mmCtx.arc(mx, my, entry.discovered ? 6 : 5, 0, Math.PI * 2);
     if (entry.discovered) {
-      mmCtx.fillStyle = entry.def.accent;
+      mmCtx.fillStyle = entry.accent;
       mmCtx.fill();
     } else {
-      mmCtx.strokeStyle = entry.def.accent;
+      mmCtx.strokeStyle = entry.accent;
       mmCtx.lineWidth = 2.5;
       mmCtx.stroke();
     }
   }
 
   // Player arrow, always pointing up.
-  mmCtx.fillStyle = '#ffffff';
+  mmCtx.fillStyle = token('--minimap-player');
   mmCtx.beginPath();
   mmCtx.moveTo(mid, mid - 9);
   mmCtx.lineTo(mid + 6.5, mid + 7);

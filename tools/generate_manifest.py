@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Scans assets/models/low + assets/models/high and writes assets/models/manifest.json.
 
-Computes each instrument's bounding box, normalizes scale, and packs the instruments
-into one adjacent row so the world reads as a walkable exhibition rather than a few
-specks scattered across a field. Positions/scale/text can be hand-edited afterward
-without touching any code (see PLAN.md §2.4).
+Computes each instrument's bounding box, normalizes scale, and scatters the stations
+across the field with a seeded RNG so the layout is reproducible but not a grid or a
+row. Positions/rotations/text can be hand-edited afterward without touching code
+(see PLAN.md §2.4).
+
+This file holds *content and layout*, not design: station colours come from the active
+theme in src/themes/, so swapping the theme restyles the world.
 """
 import json
+import math
+import random
 import re
 from pathlib import Path
 
@@ -23,95 +28,85 @@ MANIFEST_PATH = MODELS_DIR / "manifest.json"
 # each model is scaled so its largest bbox dimension maps to this many meters.
 TARGET_MAX_DIM_M = 8.0
 
-GAP_M = 1.0  # gap between neighbouring station footprints
+LAYOUT_SEED = 7  # change to reshuffle the scatter
+FIELD_RADIUS_M = 34.0  # stations are scattered inside this disc
+CLEARING_RADIUS_M = 12.0  # kept free in the middle so the player spawns in the open
+MIN_GAP_M = 3.5  # free space between two stations' bounding circles
 
-ACCENTS = [
-    "#4fa3ff",
-    "#ffb04f",
-    "#6ee7a8",
-    "#ff7a9c",
-    "#c08cff",
-    "#ffe066",
-    "#57d4e8",
-    "#ff9a5a",
-]
-
-# Placeholder exhibit texts - these describe the general kind of station shown and are
-# meant to be reviewed/replaced by someone with the actual DWD site documentation.
+# Exhibit copy. Placeholder texts written from the model names - review against the
+# real site documentation. German, per the SCAPE brand language.
 INFO = {
     "01_MOHP": {
-        "title": "Hohenpeißenberg Observatory",
+        "title": "Observatorium Hohenpeißenberg",
         "description": (
-            "A mountain observatory site. Hohenpeißenberg in Bavaria holds one of the "
-            "longest unbroken weather records in the world, with observations running "
-            "since 1781 - which makes its measurement series a reference for studying "
-            "long-term climate change."
+            "Ein Bergobservatorium. Der Hohenpeißenberg in Bayern besitzt eine der "
+            "längsten ununterbrochenen Wetteraufzeichnungen der Welt – gemessen wird "
+            "hier seit 1781. Dadurch ist seine Messreihe ein wichtiger Bezugspunkt für die "
+            "Klimaforschung."
         ),
-        "measures": ["Temperature", "Humidity", "Air pressure", "Radiation", "Trace gases"],
+        "measures": ["Temperatur", "Luftfeuchte", "Luftdruck", "Strahlung", "Spurengase"],
     },
     "02_Sturmwarn_Lindau": {
-        "title": "Storm Warning Station Lindau",
+        "title": "Sturmwarnstation Lindau",
         "description": (
-            "A lakeside storm-warning beacon. Around German lakes the flash rate is the "
-            "message: 40 flashes per minute is a strong-wind warning, 90 flashes per "
-            "minute is a storm warning - readable from a boat long before the weather "
-            "arrives."
+            "Eine Sturmwarnleuchte am See. An deutschen Seen steckt die Botschaft im Takt: "
+            "40 Blitze pro Minute bedeuten Starkwindwarnung, 90 Blitze pro Minute "
+            "Sturmwarnung – vom Boot aus lange zu erkennen, bevor das Wetter da ist."
         ),
-        "measures": ["Wind speed", "Wind direction", "Gusts"],
+        "measures": ["Windgeschwindigkeit", "Windrichtung", "Böen"],
     },
     "04_AMDA": {
-        "title": "Automatic Measuring Station",
+        "title": "Automatische Messstation",
         "description": (
-            "An unstaffed automatic station. Sensors sit at standardised heights on the "
-            "masts so that readings are comparable between sites, and the station reports "
-            "on its own at fixed intervals, day and night, with no observer present."
+            "Eine Station ohne Personal. Die Sensoren sitzen in genormten Höhen an den "
+            "Masten, damit die Werte zwischen den Standorten vergleichbar bleiben. Gemeldet "
+            "wird selbstständig, Tag und Nacht."
         ),
-        "measures": ["Temperature", "Humidity", "Wind", "Precipitation", "Sunshine duration"],
+        "measures": ["Temperatur", "Luftfeuchte", "Wind", "Niederschlag", "Sonnenscheindauer"],
     },
     "05_Meer": {
-        "title": "Marine Measuring Platform",
+        "title": "Meeresmessplattform",
         "description": (
-            "A marine/coastal measurement platform. Instruments over water face salt spray "
-            "and constant motion, so the hardware is built to survive the environment it "
-            "is measuring."
+            "Eine Messplattform auf See. Geräte über dem Wasser trotzen Salz, Gischt "
+            "und ständiger Bewegung – die Technik muss aushalten, was sie misst."
         ),
-        "measures": ["Wind", "Air temperature", "Water temperature", "Wave height"],
+        "measures": ["Wind", "Lufttemperatur", "Wassertemperatur", "Wellenhöhe"],
     },
     "06_MME": {
-        "title": "Measurement Field",
+        "title": "Messfeld",
         "description": (
-            "An open measurement field carrying an array of sensors. Keeping the surroundings "
-            "clear matters as much as the instruments: obstacles, buildings and trees would "
-            "distort wind and radiation readings."
+            "Ein offenes Messfeld mit vielen Sensoren. Die freie Umgebung ist so wichtig wie "
+            "die Geräte selbst: Gebäude, Bäume oder Zäune würden Wind "
+            "und Strahlung verfälschen."
         ),
-        "measures": ["Temperature", "Humidity", "Soil temperature", "Radiation"],
+        "measures": ["Temperatur", "Luftfeuchte", "Bodentemperatur", "Strahlung"],
     },
     "07_Airport": {
-        "title": "Airport Weather Station",
+        "title": "Flughafen-Wetterstation",
         "description": (
-            "Aviation weather instrumentation. Anemometers sit near the runway thresholds and "
-            "a ceilometer measures cloud base, because for aviation the decisive numbers are "
-            "crosswind, visibility and cloud height."
+            "Wettertechnik für die Luftfahrt. Windmesser stehen nahe den Pisten, ein "
+            "Ceilometer misst die Wolkenuntergrenze – für Flugzeuge zählen vor "
+            "allem Seitenwind, Sicht und Wolkenhöhe."
         ),
-        "measures": ["Wind", "Visibility / RVR", "Cloud base", "Air pressure (QNH)"],
+        "measures": ["Wind", "Sichtweite / RVR", "Wolkenuntergrenze", "Luftdruck (QNH)"],
     },
     "08_RADAK": {
-        "title": "Radar Site",
+        "title": "Radarstandort",
         "description": (
-            "A radar installation. Radar does not sample a single point - it scans the "
-            "surrounding volume of atmosphere, which is what makes area-wide precipitation "
-            "maps and nowcasting possible."
+            "Eine Radaranlage. Radar misst nicht an einem einzigen Punkt, sondern tastet die "
+            "Luft im Umkreis ab – so entstehen flächendeckende Niederschlagskarten "
+            "und Vorhersagen für die nächsten Stunden."
         ),
-        "measures": ["Precipitation intensity", "Echo top height", "Radial velocity"],
+        "measures": ["Niederschlagsintensität", "Echo-Obergrenze", "Radialgeschwindigkeit"],
     },
     "09_ATSO_Norderney": {
-        "title": "Norderney Island Station",
+        "title": "Inselstation Norderney",
         "description": (
-            "A North Sea island station. Coastal and island sites cover the sea-to-land "
-            "transition, where the temperature contrast between water and land drives local "
-            "wind and fog."
+            "Eine Station auf einer Nordseeinsel. Küsten- und Inselstandorte erfassen den "
+            "Übergang von Meer zu Land, wo der Temperaturunterschied zwischen Wasser und "
+            "Küste Wind und Nebel antreibt."
         ),
-        "measures": ["Wind", "Temperature", "Humidity", "Air pressure"],
+        "measures": ["Wind", "Temperatur", "Luftfeuchte", "Luftdruck"],
     },
 }
 
@@ -143,6 +138,38 @@ def deck_height(mesh, bbox_min) -> float:
     return max((best * bin_size) - bbox_min[1], 0.0)
 
 
+def scatter(radii, rng):
+    """Rejection-samples non-overlapping positions in a disc, leaving the middle clear.
+
+    `radii` are the stations' bounding-circle radii; returns a list of (x, z).
+    Largest first, so the tight cases are placed while there's still room.
+    """
+    order = sorted(range(len(radii)), key=lambda i: -radii[i])
+    placed = {}
+
+    for i in order:
+        r = radii[i]
+        for _ in range(20000):
+            # sqrt() keeps the sample uniform over the disc rather than centre-heavy.
+            dist = math.sqrt(rng.random()) * (FIELD_RADIUS_M - r)
+            angle = rng.random() * math.tau
+            x, z = dist * math.cos(angle), dist * math.sin(angle)
+
+            if math.hypot(x, z) < CLEARING_RADIUS_M + r:
+                continue
+            if any(
+                math.hypot(x - px, z - pz) < r + radii[j] + MIN_GAP_M
+                for j, (px, pz) in placed.items()
+            ):
+                continue
+            placed[i] = (x, z)
+            break
+        else:
+            raise SystemExit(f"could not place station {i}: field too crowded")
+
+    return [placed[i] for i in range(len(radii))]
+
+
 def pretty_name(stem: str) -> str:
     # "07_Airport_v51" -> "Airport"
     name = re.sub(r"^\d+_", "", stem)
@@ -151,15 +178,14 @@ def pretty_name(stem: str) -> str:
 
 
 def info_for(stem: str) -> dict:
-    key = re.sub(r"_v\d+$", "", stem)
-    return INFO.get(key, {})
+    return INFO.get(re.sub(r"_v\d+$", "", stem), {})
 
 
 def main():
-    low_files = sorted(LOW_DIR.glob("*.glb"))
+    rng = random.Random(LAYOUT_SEED)
     entries = []
 
-    for low_path in low_files:
+    for low_path in sorted(LOW_DIR.glob("*.glb")):
         stem = low_path.stem
         if not (HIGH_DIR / low_path.name).exists():
             raise SystemExit(f"missing high-LOD file for {stem}")
@@ -169,44 +195,48 @@ def main():
         bbox_max = mesh.bounds[1].tolist()
         size = [bbox_max[i] - bbox_min[i] for i in range(3)]
         scale = TARGET_MAX_DIM_M / (max(size) or 1.0)
-        deck = deck_height(mesh, bbox_min)
-        entries.append((stem, low_path.name, bbox_min, bbox_max, size, scale, deck))
+        entries.append(
+            {
+                "stem": stem,
+                "file": low_path.name,
+                "bbox_min": bbox_min,
+                "bbox_max": bbox_max,
+                "size": size,
+                "scale": scale,
+                "deck": deck_height(mesh, bbox_min),
+                "footprint": [size[0] * scale, size[2] * scale],
+            }
+        )
 
-    # Pack the stations into one row along X, footprints adjacent with a fixed gap.
-    total_width = sum(e[4][0] * e[5] for e in entries) + GAP_M * (len(entries) - 1)
-    cursor = -total_width / 2
+    radii = [math.hypot(*e["footprint"]) / 2 for e in entries]
+    positions = scatter(radii, rng)
 
     instruments = []
-    for i, (stem, filename, bbox_min, bbox_max, size, scale, deck) in enumerate(entries):
-        footprint = [size[0] * scale, size[2] * scale]
-        x = cursor + footprint[0] / 2
-        cursor += footprint[0] + GAP_M
-
-        info = info_for(stem)
+    for e, (x, z) in zip(entries, positions):
+        info = info_for(e["stem"])
         instruments.append(
             {
-                "id": stem,
-                "name": info.get("title") or pretty_name(stem),
-                "sourceName": pretty_name(stem),
+                "id": e["stem"],
+                "name": info.get("title") or pretty_name(e["stem"]),
+                "sourceName": pretty_name(e["stem"]),
                 "description": info.get("description", ""),
                 "measures": info.get("measures", []),
-                "accent": ACCENTS[i % len(ACCENTS)],
-                "low": f"assets/models/low/{filename}",
-                "high": f"assets/models/high/{filename}",
-                "position": [round(x, 3), 0, 0],
-                "rotationY": 0,
-                "scale": round(scale, 6),
+                "low": f"assets/models/low/{e['file']}",
+                "high": f"assets/models/high/{e['file']}",
+                "position": [round(x, 3), 0, round(z, 3)],
+                "rotationY": round(rng.uniform(0, math.tau), 4),
+                "scale": round(e["scale"], 6),
                 # Recentres the mesh on its own footprint and sits it on the ground,
                 # in raw model units (applied inside the scaled group).
                 "modelOffset": [
-                    round(-(bbox_min[0] + bbox_max[0]) / 2, 6),
-                    round(-bbox_min[1], 6),
-                    round(-(bbox_min[2] + bbox_max[2]) / 2, 6),
+                    round(-(e["bbox_min"][0] + e["bbox_max"][0]) / 2, 6),
+                    round(-e["bbox_min"][1], 6),
+                    round(-(e["bbox_min"][2] + e["bbox_max"][2]) / 2, 6),
                 ],
-                "footprint": [round(footprint[0], 3), round(footprint[1], 3)],
-                "height": round(size[1] * scale, 3),
+                "footprint": [round(e["footprint"][0], 3), round(e["footprint"][1], 3)],
+                "height": round(e["size"][1] * e["scale"], 3),
                 # Top of the base slab, in world meters - the step the player walks up.
-                "deckHeight": round(deck * scale, 3),
+                "deckHeight": round(e["deck"] * e["scale"], 3),
             }
         )
 
@@ -217,11 +247,12 @@ def main():
             f"dimension is normalized to {TARGET_MAX_DIM_M}m. Hand-calibrate against the real "
             "instrument dimensions before treating scale or distances as accurate. The "
             "`description`/`measures` texts are placeholder exhibit copy - review them against "
-            "the actual site documentation."
+            "the actual site documentation. Station colours are not here: they come from the "
+            "active theme in src/themes/."
         ),
         "instruments": instruments,
     }
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {MANIFEST_PATH} with {len(instruments)} instruments")
 
 

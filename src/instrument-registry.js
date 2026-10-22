@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { loadGlb, disposeObject3D } from './model-loader.js';
+import { theme } from './theme.js';
 
 const HIGH_LOD_ENTER_DIST = 18; // meters: start loading high-LOD when closer than this
 const HIGH_LOD_EXIT_DIST = 26; // meters: dispose high-LOD when farther than this (hysteresis)
 const MAX_CONCURRENT_LOADS = 2;
 
-// Source STEPs carry no materials, so each station gets a faint accent tint to tell
-// them apart, and flat shading - the meshes have no normals, and per-face lighting is
-// the right look for tessellated CAD geometry anyway.
+// Source STEPs carry no materials, so each station is tinted with a colour from the
+// active theme to tell them apart, and flat shaded - the meshes have no normals, and
+// per-face lighting is the right look for tessellated CAD geometry anyway.
 function stationMaterial(accent) {
-  const color = new THREE.Color(accent).lerp(new THREE.Color(0x9aa3ad), 0.84);
+  const { target, mix } = theme.scene.stationTint;
   return new THREE.MeshStandardMaterial({
-    color,
-    metalness: 0.45,
-    roughness: 0.5,
+    color: new THREE.Color(accent).lerp(new THREE.Color(target), mix),
+    ...theme.scene.stationMaterial,
     flatShading: true,
   });
 }
@@ -40,7 +40,10 @@ export class InstrumentRegistry {
     const list = manifest.instruments;
     let loaded = 0;
 
-    for (const def of list) {
+    for (const [index, def] of list.entries()) {
+      const palette = theme.scene.stationPalette;
+      const accent = palette[index % palette.length];
+
       const group = new THREE.Group();
       group.position.fromArray(def.position);
       group.rotation.y = def.rotationY || 0;
@@ -61,7 +64,8 @@ export class InstrumentRegistry {
         def,
         group,
         meshAnchor,
-        material: stationMaterial(def.accent),
+        accent,
+        material: stationMaterial(accent),
         lowMesh: null,
         highMesh: null,
         highLoading: false,
